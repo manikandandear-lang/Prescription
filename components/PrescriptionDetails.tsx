@@ -1,10 +1,106 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PrescriptionData, Medication } from '../types';
-import { User, Stethoscope, Pill, Calendar, Clock, AlertCircle, FileText } from 'lucide-react';
+import { User, Stethoscope, Pill, Calendar, Clock, AlertCircle, FileText, ExternalLink, ImageOff } from 'lucide-react';
 
 interface PrescriptionDetailsProps {
   data: PrescriptionData;
 }
+
+// Sub-component for handling Medication Image logic
+const MedicationImage: React.FC<{ name: string; genericName?: string }> = ({ name, genericName }) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchImage = async () => {
+      setLoading(true);
+      setError(false);
+      setImageUrl(null);
+
+      // Try searching by generic name first (better results), then brand name
+      const searchTerms = [];
+      if (genericName) searchTerms.push(genericName);
+      searchTerms.push(name);
+
+      let foundImage = null;
+
+      for (const term of searchTerms) {
+        // Simple clean up: remove dosage info if present to help search (e.g. "Dolo 650" -> "Dolo")
+        const cleanTerm = term.replace(/\d+.*(mg|ml|g)/i, '').trim();
+        if (!cleanTerm) continue;
+
+        try {
+          // Using NLM RxImage API (Public US Government API)
+          const response = await fetch(`https://rximage.nlm.nih.gov/api/rximage/1/rxnav?name=${encodeURIComponent(cleanTerm)}&rxs=ORIGINAL`);
+          const data = await response.json();
+          
+          if (data.nlmRxImages && data.nlmRxImages.length > 0) {
+            foundImage = data.nlmRxImages[0].imageUrl;
+            break; // Stop if found
+          }
+        } catch (e) {
+          console.warn("Failed to fetch image for", cleanTerm);
+        }
+      }
+
+      if (foundImage) {
+        setImageUrl(foundImage);
+      } else {
+        setError(true);
+      }
+      setLoading(false);
+    };
+
+    fetchImage();
+  }, [name, genericName]);
+
+  const googleImageSearchUrl = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(name + " tablet")}`;
+
+  if (loading) {
+    return (
+      <div className="h-16 w-16 bg-gray-100 rounded-lg flex items-center justify-center animate-pulse flex-shrink-0">
+        <Pill size={20} className="text-gray-300" />
+      </div>
+    );
+  }
+
+  if (imageUrl) {
+    return (
+      <div className="group relative h-16 w-16 flex-shrink-0">
+        <img 
+          src={imageUrl} 
+          alt={name} 
+          className="h-16 w-16 object-cover rounded-lg border border-gray-200 bg-white"
+        />
+        <a 
+           href={googleImageSearchUrl}
+           target="_blank" 
+           rel="noreferrer"
+           className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+           title="View on Google Images"
+        >
+            <ExternalLink size={16} className="text-white" />
+        </a>
+      </div>
+    );
+  }
+
+  return (
+     <div className="h-16 w-16 bg-medical-50 rounded-lg flex flex-col items-center justify-center border border-medical-100 flex-shrink-0 group relative">
+        <Pill size={24} className="text-medical-400" />
+         <a 
+           href={googleImageSearchUrl}
+           target="_blank" 
+           rel="noreferrer"
+           className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+           title="Search on Google"
+        >
+            <ExternalLink size={16} className="text-white" />
+        </a>
+     </div>
+  );
+};
 
 const PrescriptionDetails: React.FC<PrescriptionDetailsProps> = ({ data }) => {
   if (!data.isPrescription) {
@@ -113,10 +209,17 @@ const PrescriptionDetails: React.FC<PrescriptionDetailsProps> = ({ data }) => {
           {data.medications && data.medications.length > 0 ? (
             data.medications.map((med: Medication, index: number) => (
               <div key={index} className="p-4 md:p-6 hover:bg-gray-50 transition-colors">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                <div className="flex flex-col md:flex-row md:items-center gap-4">
+                  
+                  {/* Image Column */}
+                  <MedicationImage name={med.name} genericName={med.genericName} />
+
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                          <h4 className="text-lg font-medium text-medical-900">{med.name}</h4>
+                         {med.genericName && med.genericName !== med.name && (
+                             <span className="hidden sm:inline-block text-xs text-gray-400 font-light">({med.genericName})</span>
+                         )}
                          {med.type && (
                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 uppercase tracking-wide">
                                  {med.type}
@@ -125,15 +228,15 @@ const PrescriptionDetails: React.FC<PrescriptionDetailsProps> = ({ data }) => {
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
                       {med.dosage && (
-                          <span className="font-semibold text-gray-900">Dosage: {med.dosage}</span>
+                          <span className="font-semibold text-gray-900 font-noto">{med.dosage}</span>
                       )}
                       {med.duration && (
-                          <span className="flex items-center"><Clock size={14} className="mr-1 text-gray-400"/> {med.duration}</span>
+                          <span className="flex items-center font-noto"><Clock size={14} className="mr-1 text-gray-400"/> {med.duration}</span>
                       )}
                     </div>
                   </div>
                   
-                  <div className="flex-1 md:text-right">
+                  <div className="flex-1 md:text-right font-noto">
                     <div className="inline-block text-left md:text-right">
                         <p className="text-sm font-medium text-gray-900 mb-1">{med.frequency}</p>
                         {med.instructions && (

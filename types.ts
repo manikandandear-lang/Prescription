@@ -1,5 +1,6 @@
 export interface Medication {
   name: string;
+  genericName?: string; // For searching images (e.g. Paracetamol)
   dosage: string;
   frequency: string;
   duration: string;
