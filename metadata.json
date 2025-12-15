@@ -1,0 +1,5 @@
+{
+  "name": "ScriptScan",
+  "description": "A smart medical prescription analyzer that converts handwritten or printed prescriptions into clear, digital formats using Gemini AI.",
+  "requestFramePermissions": []
+}
